@@ -1,0 +1,100 @@
+name: Portal CI, local report, and conditional Pages
+
+on:
+  push:
+    branches: ['**']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Prevent an older, slower success from publishing after a newer revision.
+concurrency:
+  group: portal-cicd-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test_and_report:
+    name: Run tests and deliver localhost report
+    runs-on: [self-hosted, windows, x64]
+    timeout-minutes: 15
+    steps:
+      - name: Check out pushed commit
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: Install dependencies
+        shell: pwsh
+        run: python -m pip install -r requirements.txt
+
+      - name: Run actual pytest test cases
+        id: tests
+        continue-on-error: true
+        shell: pwsh
+        run: python -m pytest -q tests --junitxml=pytest-results.xml
+
+      - name: Automatically send report to local HTTP receiver and optional email
+        id: reporting
+        if: always()
+        shell: pwsh
+        env:
+          REPORT_RECEIVER_URL: http://127.0.0.1:8765/report
+          REPORT_TOKEN: ${{ secrets.REPORT_TOKEN }}
+          SEND_EMAIL: ${{ vars.SEND_EMAIL }}
+          SMTP_HOST: ${{ vars.SMTP_HOST }}
+          SMTP_PORT: ${{ vars.SMTP_PORT }}
+          SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+          REPORT_EMAIL_TO: ${{ vars.REPORT_EMAIL_TO }}
+          REPORT_EMAIL_FROM: ${{ vars.REPORT_EMAIL_FROM }}
+        run: python scripts/send_report.py
+
+      - name: Upload test evidence to workflow
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-evidence-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            pytest-results.xml
+            ci-test-report.json
+          if-no-files-found: warn
+
+      - name: Ensure failed tests make CI fail
+        if: always()
+        shell: pwsh
+        env:
+          TEST_OUTCOME: ${{ steps.tests.outcome }}
+          REPORT_OUTCOME: ${{ steps.reporting.outcome }}
+        run: |
+          if ($env:TEST_OUTCOME -ne 'success' -or $env:REPORT_OUTCOME -ne 'success') {
+            Write-Error "CI FAILED: tests=$env:TEST_OUTCOME; reporting=$env:REPORT_OUTCOME"
+            exit 1
+          }
+          Write-Host 'All tests passed and the actual result report was delivered.'
+
+  deploy_pages:
+    name: Publish static demo only after passing tests
+    needs: test_and_report
+    if: github.ref == 'refs/heads/main' && needs.test_and_report.result == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: pages
+      - name: Deploy approved revision
+        id: deployment
+        uses: actions/deploy-pages@v4

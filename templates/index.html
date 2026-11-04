@@ -1,0 +1,14 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AssignmentHub | Submission Portal</title><link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}"></head>
+<body><header class="topbar"><div class="topinner"><div class="brand">✦ Assignment<span>Hub</span></div><span class="toplabel">CSC418 · DevOps Lab Mid</span></div></header>
+<main class="container"><div class="hero"><div><span class="eyebrow">STUDENT SUBMISSION SYSTEM</span><h1>Submit your work.<br><span>Stay organized.</span></h1><p>Share your assignment link in seconds. Every successful submission is recorded below.</p></div><div class="hero-icon">↗</div></div>
+{% with messages = get_flashed_messages(with_categories=true) %}{% for category, message in messages %}<div class="alert success" role="status">{{ message }}</div>{% endfor %}{% endwith %}
+<div class="layout"><section class="panel"><div class="panelhead"><span class="number">01</span><div><h2>New submission</h2><p>All four fields are required.</p></div></div>
+<form method="post" action="{{ url_for('submit') }}" novalidate>
+{% for key, label, placeholder in [('student_name', 'Student name', 'e.g. Aima Perveen'), ('registration_number', 'Registration number', 'e.g. FA23-BAI-066'), ('assignment_title', 'Assignment title', 'e.g. DevOps Lab Mid'), ('submission_url', 'Submission URL', 'https://github.com/username/project')] %}
+<div class="field"><label for="{{ key }}">{{ label }} <span>*</span></label><input id="{{ key }}" name="{{ key }}" value="{{ old.get(key,'') }}" placeholder="{{ placeholder }}" aria-invalid="{{ 'true' if errors.get(key) else 'false' }}" {% if key == 'submission_url' %}type="url"{% else %}type="text"{% endif %} required>{% if errors.get(key) %}<div class="error" role="alert">{{ errors[key] }}</div>{% endif %}</div>{% endfor %}
+<button type="submit" class="submit">Submit assignment <span>→</span></button></form></section>
+<section class="panel submissions"><div class="panelhead"><span class="number">02</span><div><h2>Saved submissions</h2><p>{{ submissions|length }} total recorded</p></div><span class="count">{{ submissions|length }}</span></div>
+{% if submissions %}<div class="records">{% for s in submissions %}<article class="record"><div class="recordheader"><strong>{{ s['assignment_title'] }}</strong><span class="tag">#{{ s['id'] }}</span></div><p>{{ s['student_name'] }} <span>·</span> {{ s['registration_number'] }}</p><a href="{{ s['submission_url'] }}" target="_blank" rel="noopener noreferrer">Open submission ↗</a><small>{{ s['submitted_at'] }} UTC</small></article>{% endfor %}</div>{% else %}<div class="empty"><div class="emptyicon">☷</div><h3>No submissions yet</h3><p>Your submitted assignments will show up here.</p></div>{% endif %}</section></div>
+<footer>AssignmentHub · Built for CSC418 DevOps for Cloud Computing</footer></main></body></html>
