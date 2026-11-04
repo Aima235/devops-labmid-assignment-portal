@@ -15,7 +15,7 @@ def validate_submission(values):
     labels = {"student_name": "Student name", "registration_number": "Registration number",
               "assignment_title": "Assignment title", "submission_url": "Submission URL"}
     for field, label in labels.items():
-        if not cleaned[field]:
+        if not cleaned[field] and field != "registration_number":
             errors[field] = f"{label} is required."
     if cleaned["submission_url"]:
         try:
