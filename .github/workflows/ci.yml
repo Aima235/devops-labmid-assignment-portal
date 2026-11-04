@@ -8,7 +8,6 @@ on:
 permissions:
   contents: read
 
-# Prevent an older, slower success from publishing after a newer revision.
 concurrency:
   group: portal-cicd-${{ github.ref }}
   cancel-in-progress: true
@@ -18,30 +17,28 @@ jobs:
     name: Run tests and deliver localhost report
     runs-on: [self-hosted, windows, x64]
     timeout-minutes: 15
+    env:
+      PYTHON_EXE: 'D:\Documents\Devops\DevOps_LabMid_Complete\.venv\Scripts\python.exe'
+    defaults:
+      run:
+        shell: cmd
     steps:
       - name: Check out pushed commit
         uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-          cache: pip
-
-      - name: Install dependencies
-        shell: pwsh
-        run: python -m pip install -r requirements.txt
+      - name: Verify local Python and install dependencies
+        run: |
+          "%PYTHON_EXE%" --version
+          "%PYTHON_EXE%" -m pip install -r requirements.txt
 
       - name: Run actual pytest test cases
         id: tests
         continue-on-error: true
-        shell: pwsh
-        run: python -m pytest -q tests --junitxml=pytest-results.xml
+        run: '"%PYTHON_EXE%" -m pytest -q tests --junitxml=pytest-results.xml'
 
-      - name: Automatically send report to local HTTP receiver and optional email
+      - name: Automatically deliver report to local receiver and optional email
         id: reporting
         if: always()
-        shell: pwsh
         env:
           REPORT_RECEIVER_URL: http://127.0.0.1:8765/report
           REPORT_TOKEN: ${{ secrets.REPORT_TOKEN }}
@@ -52,7 +49,7 @@ jobs:
           SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
           REPORT_EMAIL_TO: ${{ vars.REPORT_EMAIL_TO }}
           REPORT_EMAIL_FROM: ${{ vars.REPORT_EMAIL_FROM }}
-        run: python scripts/send_report.py
+        run: '"%PYTHON_EXE%" scripts\send_report.py'
 
       - name: Upload test evidence to workflow
         if: always()
@@ -66,16 +63,13 @@ jobs:
 
       - name: Ensure failed tests make CI fail
         if: always()
-        shell: pwsh
         env:
           TEST_OUTCOME: ${{ steps.tests.outcome }}
           REPORT_OUTCOME: ${{ steps.reporting.outcome }}
         run: |
-          if ($env:TEST_OUTCOME -ne 'success' -or $env:REPORT_OUTCOME -ne 'success') {
-            Write-Error "CI FAILED: tests=$env:TEST_OUTCOME; reporting=$env:REPORT_OUTCOME"
-            exit 1
-          }
-          Write-Host 'All tests passed and the actual result report was delivered.'
+          if not "%TEST_OUTCOME%"=="success" exit /b 1
+          if not "%REPORT_OUTCOME%"=="success" exit /b 1
+          echo All tests passed and the actual result report was delivered.
 
   deploy_pages:
     name: Publish static demo only after passing tests
